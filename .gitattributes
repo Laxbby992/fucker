@@ -1,3 +1,4 @@
 *.zip filter=lfs diff=lfs merge=lfs -text
 poland.txt filter=lfs diff=lfs merge=lfs -text
 *.txt filter=lfs diff=lfs merge=lfs -text
+pl.txt filter=lfs diff=lfs merge=lfs -text
