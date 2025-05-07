@@ -12,12 +12,13 @@ HTML = """<!DOCTYPE html>
 <head>
 <meta charset="windows-1252">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Oldantest ~ Leaks Finder</title>
+<title>Oldantest ~ Data Leak Finder</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600&display=swap');
 body {
   margin: 0;
-  font-family: 'Orbitron', sans-serif;
+  font-family: 'Poppins', sans-serif;
   background: var(--bg);
   color: var(--color);
   overflow-x: hidden;
@@ -100,9 +101,31 @@ button:hover { background: #00cccc; }
 @keyframes fadeIn { from{opacity:0; transform:scale(0.97);} to{opacity:1; transform:scale(1);} }
 @keyframes fadeSlide { from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
 .controls { display: flex; flex-wrap: wrap; justify-content: space-between; margin-bottom: 20px; gap: 10px; }
+canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+footer {
+  text-align: center;
+  margin-top: 30px;
+  color: #888;
+}
+@media (max-width: 768px) {
+  h1 { font-size: 2em; }
+  input { width: calc(100% - 100px); }
+}
+@media (max-width: 480px) {
+  h1 { font-size: 1.8em; }
+  .controls { flex-direction: column; }
+}
 </style>
 </head>
 <body data-theme="dark">
+<canvas id="backgroundCanvas"></canvas>
 <div class="container">
   <h1>Oldantest ~ Leaks Finder</h1>
   <div class="controls">
@@ -121,6 +144,7 @@ button:hover { background: #00cccc; }
   <div id="counter">Results: 0</div>
   <div id="results"></div>
 </div>
+<footer>&copy; Oldantest 2025. All rights reserved.</footer>
 <audio id="beep" src="https://freesound.org/data/previews/341/341695_5260877-lq.mp3"></audio>
 <script>
 let es, results = [], theme = localStorage.getItem("theme") || "dark";
@@ -181,7 +205,28 @@ function startSearch() {
     }
   };
 }
+
 document.getElementById('query').addEventListener('keydown', e => { if(e.key === 'Enter') startSearch(); });
+
+function generateCanvas() {
+  const canvas = document.getElementById('backgroundCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.beginPath();
+    ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, 5 + Math.random() * 10, 0, Math.PI * 2);
+    ctx.fillStyle = `hsl(${Math.random() * 360}, 100%, 50%)`;
+    ctx.fill();
+    requestAnimationFrame(draw);
+  }
+
+  draw();
+}
+
+generateCanvas();
 </script>
 </body>
 </html>
