@@ -1,93 +1,246 @@
-from flask import Flask, request
-import os
-import re
-import html
+from flask import Flask, request, render_template_string, Response, stream_with_context
+import os, re, json
+from concurrent.futures import ThreadPoolExecutor
+from queue import Queue, Empty
 
 app = Flask(__name__)
+EXTS = ['.txt', '.csv', '.json']
+EXEC = ThreadPoolExecutor(max_workers=500)
 
-def normalize(text):
-    return re.sub(r'[^a-z0-9]+', '', text.lower())
-
-def search(query):
-    results = []
-    allowed = {'txt', 'csv', 'json'}
-    norm_query = normalize(query)
-    if not norm_query:
-        return []
-    for file in os.listdir('.'):
-        path = os.path.join('.', file)
-        ext = file.rsplit('.', 1)[-1].lower()
-        if os.path.isfile(path) and ext in allowed:
-            try:
-                with open(path, 'r', encoding='utf-8', errors='ignore') as f:
-                    lines = f.read().splitlines()
-                    for i, line in enumerate(lines):
-                        if norm_query in normalize(line):
-                            results.append({
-                                'filename': html.escape(file),
-                                'line_num': i + 1,
-                                'line': html.escape(line)
-                            })
-            except:
-                continue
-    return results
-
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    query = ''
-    results = []
-    if request.method == 'POST':
-        query = request.form.get('query', '')
-        results = search(query)
-
-    return f'''
-<!DOCTYPE html>
+HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Oldantest Breach Finder</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body {{ font-family: 'Inter', sans-serif; }}
-        @keyframes fadeIn {{
-            from {{ opacity: 0; transform: translateY(10px); }}
-            to {{ opacity: 1; transform: translateY(0); }}
-        }}
-        .result-item {{ animation: fadeIn 0.3s ease-out forwards; }}
-    </style>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+<meta charset="windows-1252">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oldantest ~ Leaks Finder</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600&display=swap');
+body {
+  margin: 0;
+  font-family: 'Orbitron', sans-serif;
+  background: var(--bg);
+  color: var(--color);
+  overflow-x: hidden;
+  transition: background 0.3s, color 0.3s;
+}
+:root {
+  --bg: #0a0a0a;
+  --color: #eee;
+  --accent: #00ffff;
+}
+[data-theme="light"] {
+  --bg: #fff;
+  --color: #000;
+  --accent: #0066ff;
+}
+.container {
+  max-width: 880px;
+  margin: 40px auto;
+  background: #141414;
+  padding: 30px;
+  border-radius: 20px;
+  box-shadow: 0 0 40px #00ffff66;
+  animation: fadeIn 1s ease-in-out;
+}
+h1 {
+  text-align: center;
+  color: var(--accent);
+  font-size: 2.5em;
+  margin-bottom: 30px;
+  text-shadow: 0 0 12px var(--accent);
+}
+input, button, select {
+  font-size: 18px;
+  border-radius: 8px;
+  transition: .3s;
+}
+input {
+  width: calc(100% - 120px);
+  padding: 15px;
+  background: #111;
+  color: #fff;
+  border: none;
+  outline: none;
+  float: left;
+  margin-bottom: 20px;
+}
+button {
+  width: 100px;
+  padding: 15px;
+  margin-left: 10px;
+  background: var(--accent);
+  border: none;
+  color: #000;
+  cursor: pointer;
+}
+button:hover { background: #00cccc; }
+.result-item {
+  background: #1e1e1e;
+  margin: 12px 0;
+  padding: 18px;
+  border-radius: 12px;
+  box-shadow: 0 0 12px var(--accent);
+  animation: fadeSlide 0.5s ease-out;
+}
+.result-item strong {
+  display: block;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.result-item pre {
+  background: #111;
+  padding: 12px;
+  border-radius: 8px;
+  overflow: auto;
+  color: #fff;
+  font-size: 0.95em;
+}
+.highlight { background: #ff0; color: #000; padding: 2px 4px; border-radius: 4px; }
+.no-results { text-align: center; margin-top: 30px; font-size: 20px; color: #888; }
+@keyframes fadeIn { from{opacity:0; transform:scale(0.97);} to{opacity:1; transform:scale(1);} }
+@keyframes fadeSlide { from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
+.controls { display: flex; flex-wrap: wrap; justify-content: space-between; margin-bottom: 20px; gap: 10px; }
+</style>
 </head>
-<body class="bg-gradient-to-br from-gray-900 to-gray-800 text-gray-100 min-h-screen flex flex-col">
-    <div class="container mx-auto p-4 md:p-8 flex-grow">
-        <header class="text-center mb-8">
-            <h1 class="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600 mb-2">
-                Oldantest Breach Finder
-            </h1>
-            <p class="text-gray-400">Search for text in .txt, .csv, .json files in current directory</p>
-        </header>
-        <form method="post" class="mb-8 max-w-xl mx-auto">
-            <div class="flex items-center bg-gray-700 rounded-full shadow-lg overflow-hidden">
-                <input type="text" name="query" placeholder="Enter text to search..."
-                       class="w-full px-6 py-3 text-gray-100 bg-gray-700 focus:outline-none placeholder-gray-400"
-                       value="{html.escape(query)}">
-                <button type="submit"
-                        class="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white px-6 py-3 font-semibold transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50">
-                    Search
-                </button>
-            </div>
-        </form>
-        {"<div class='bg-gray-800 rounded-lg shadow-xl p-6 max-w-4xl mx-auto'><h2 class='text-2xl font-semibold mb-4 border-b border-gray-700 pb-2'>Search results for: \"" + html.escape(query) + "\"</h2>" if query else ""}
-        {f"<p class='text-gray-400 mb-4'>Found {len(results)} matching lines:</p><ul class='space-y-3 max-h-[60vh] overflow-y-auto pr-2'>" + "".join([f"<li class='result-item bg-gray-700 p-4 rounded-md shadow hover:bg-gray-600 transition duration-150 ease-in-out'><div class='flex justify-between items-center mb-1'><span class='font-mono text-sm text-purple-400 break-all'>{r['filename']}</span><span class='text-xs text-gray-500'>Line: {r['line_num']}</span></div><code class='block text-sm text-gray-200 whitespace-pre-wrap break-words'>{r['line']}</code></li>" for r in results]) + "</ul>" if results else (f"<p class='text-gray-400'>No results found for \"{html.escape(query)}\".</p>" if query else "")}
-        {"</div>" if query else ""}
-    </div>
-    <footer class="text-center p-4 text-gray-500 text-sm mt-8">
-        © Oldantest by Laxbby99 2025. All rights reserved.
-    </footer>
+<body data-theme="dark">
+<div class="container">
+  <h1>Oldantest ~ Leaks Finder</h1>
+  <div class="controls">
+    <input type="text" id="query" placeholder="Search..." autocomplete="off">
+    <select id="exts">
+      <option value="all">All</option>
+      <option value=".txt">.txt</option>
+      <option value=".csv">.csv</option>
+      <option value=".json">.json</option>
+    </select>
+    <input type="text" id="filefilter" placeholder="Filter filename...">
+    <button onclick="startSearch()">Search</button>
+    <button onclick="exportResults()">Export</button>
+    <button onclick="toggleTheme()">Theme</button>
+  </div>
+  <div id="counter">Results: 0</div>
+  <div id="results"></div>
+</div>
+<audio id="beep" src="https://freesound.org/data/previews/341/341695_5260877-lq.mp3"></audio>
+<script>
+let es, results = [], theme = localStorage.getItem("theme") || "dark";
+document.body.setAttribute("data-theme", theme);
+document.getElementById('query').value = localStorage.getItem("lastQuery") || "";
+
+function toggleTheme() {
+  theme = theme === "dark" ? "light" : "dark";
+  document.body.setAttribute("data-theme", theme);
+  localStorage.setItem("theme", theme);
+}
+
+function exportResults() {
+  if (results.length === 0) return alert("No results.");
+  const text = results.map(r => r.file + "\\n" + r.snippet).join("\\n\\n");
+  const blob = new Blob([text], {type: "text/plain"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "results.txt";
+  a.click();
+}
+
+function startSearch() {
+  const input = document.getElementById('query');
+  const ext = document.getElementById('exts').value;
+  const filter = document.getElementById('filefilter').value.trim();
+  const resultsDiv = document.getElementById('results');
+  const counter = document.getElementById('counter');
+  const q = input.value.trim();
+  if (!q) return;
+  localStorage.setItem("lastQuery", q);
+  if (es) es.close();
+  resultsDiv.innerHTML = '';
+  results = [];
+  counter.textContent = "Results: 0";
+
+  es = new EventSource(`/search?query=${encodeURIComponent(q)}&ext=${ext}&name=${encodeURIComponent(filter)}`);
+  es.onmessage = e => {
+    const item = JSON.parse(e.data);
+    results.push(item);
+    const div = document.createElement('div');
+    div.className = 'result-item';
+    const title = document.createElement('strong');
+    title.textContent = item.file;
+    const pre = document.createElement('pre');
+    const rx = new RegExp(item.regex,'gi');
+    pre.innerHTML = item.snippet.replace(rx, m => `<span class="highlight">${m}</span>`);
+    div.append(title, pre);
+    resultsDiv.append(div);
+    document.getElementById("beep").play();
+    counter.textContent = "Results: " + results.length;
+    window.scrollTo(0, document.body.scrollHeight);
+  };
+  es.onerror = () => {
+    es.close();
+    if (!resultsDiv.hasChildNodes()) {
+      resultsDiv.innerHTML = '<div class="no-results">No results found</div>';
+    }
+  };
+}
+document.getElementById('query').addEventListener('keydown', e => { if(e.key === 'Enter') startSearch(); });
+</script>
 </body>
 </html>
-'''
+"""
+
+def build_pattern(q):
+    parts = map(re.escape, q.split())
+    return re.compile(r'\W*'.join(parts), re.IGNORECASE)
+
+def file_scanner(path, pat, out_q):
+    try:
+        with open(path, 'r', errors='ignore') as f:
+            for line in f:
+                if pat.search(line):
+                    out_q.put({
+                        'file': os.path.relpath(path),
+                        'snippet': line.strip(),
+                        'regex': pat.pattern
+                    })
+    except:
+        pass
+
+@app.route('/')
+def index():
+    return render_template_string(HTML)
+
+@app.route('/search')
+def search():
+    q = request.args.get('query', '').strip()
+    ext = request.args.get('ext', 'all')
+    name_filter = request.args.get('name', '').lower()
+    if not q:
+        return '', 204
+    pat = build_pattern(q)
+    q_out = Queue()
+    futures = []
+    for root, _, files in os.walk('.'):
+        for fn in files:
+            if not fn.lower().endswith(tuple(EXTS)):
+                continue
+            if ext != 'all' and not fn.lower().endswith(ext):
+                continue
+            if name_filter and name_filter not in fn.lower():
+                continue
+            path = os.path.join(root, fn)
+            futures.append(EXEC.submit(file_scanner, path, pat, q_out))
+
+    def gen():
+        alive = True
+        while alive:
+            try:
+                item = q_out.get(timeout=0.1)
+                yield f"data: {json.dumps(item)}\n\n"
+            except Empty:
+                if all(f.done() for f in futures):
+                    alive = False
+        yield "event: done\ndata: {}\n\n"
+
+    return Response(stream_with_context(gen()), mimetype='text/event-stream')
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001)
+    app.run(host='0.0.0.0', port=5001, threaded=True)
