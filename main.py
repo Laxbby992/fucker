@@ -13,60 +13,72 @@ HTML = """<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Oldantest ~ Data Leak Finder</title>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap" rel="stylesheet">
 <style>
 body {
-  font-family: 'Poppins', sans-serif;
   margin: 0;
-  background: #111;
-  color: #fff;
+  font-family: 'Poppins', sans-serif;
+  background: #0d1117;
+  color: white;
   overflow-x: hidden;
 }
 .container {
-  padding: 1rem;
-  max-width: 900px;
+  max-width: 800px;
   margin: auto;
+  padding: 2rem;
+}
+h1 {
+  text-align: center;
+  font-size: 2rem;
+  margin-bottom: 1rem;
 }
 .controls {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  justify-content: center;
   margin-bottom: 1rem;
 }
 .controls input, .controls select, .controls button {
-  padding: 0.6rem;
-  font-size: 1rem;
+  font-family: 'Poppins', sans-serif;
+  padding: 0.5rem 1rem;
   border: none;
-  border-radius: 8px;
-}
-.controls input, .controls select {
-  flex: 1 1 150px;
+  border-radius: 12px;
+  font-size: 1rem;
 }
 .controls button {
-  background-color: #222;
-  color: #fff;
+  background: linear-gradient(135deg, #00ffff, #0066ff);
+  color: black;
+  transition: all 0.3s ease;
   cursor: pointer;
 }
 .controls button:hover {
-  background-color: #444;
+  opacity: 0.8;
 }
 #results {
   margin-top: 1rem;
 }
 .result-item {
-  background: #222;
+  background: #161b22;
   padding: 1rem;
-  border-radius: 12px;
   margin-bottom: 1rem;
-  animation: fadeIn 0.3s ease-out forwards;
+  border-radius: 12px;
+  animation: fadeIn 0.5s ease-out forwards;
 }
 .result-item pre {
   white-space: pre-wrap;
-  word-wrap: break-word;
+  word-break: break-word;
 }
 .highlight {
   background: yellow;
   color: black;
+  padding: 0 4px;
+  border-radius: 3px;
+}
+.no-results {
+  text-align: center;
+  margin-top: 2rem;
+  font-size: 1.2rem;
 }
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
@@ -74,29 +86,19 @@ body {
 }
 canvas {
   position: fixed;
-  top: 0;
-  left: 0;
+  top: 0; left: 0;
   z-index: -1;
-}
-.no-results {
-  text-align: center;
-  padding: 2rem;
-  color: #888;
 }
 footer {
   text-align: center;
-  margin-top: 3rem;
-  color: #555;
+  margin-top: 4rem;
+  padding-bottom: 1rem;
+  color: #888;
   font-size: 0.9rem;
-}
-@media (max-width: 768px) {
-  .controls {
-    flex-direction: column;
-  }
 }
 </style>
 </head>
-<body data-theme="dark">
+<body>
 <canvas id="bg"></canvas>
 <div class="container">
   <h1>Oldantest ~ Leaks Finder</h1>
@@ -109,96 +111,111 @@ footer {
       <option value=".json">.json</option>
     </select>
     <button onclick="startSearch()">Search</button>
-    <button id="exportBtn" onclick="exportResults()" style="display:none;">Export</button>
+    <button onclick="exportResults()">Export</button>
+    <button onclick="toggleTheme()">Theme</button>
   </div>
   <div id="counter">Results: 0</div>
   <div id="results"></div>
 </div>
-<audio id="beep" src="/static/beep-6-96243.mp3"></audio>
+<audio id="beep" src="https://freesound.org/data/previews/341/341695_5260877-lq.mp3"></audio>
 <footer>&copy; Oldantest 2025. All rights reserved.</footer>
 <script>
-let es, results = []
+let es, results = [], theme = localStorage.getItem("theme") || "dark";
+document.body.setAttribute("data-theme", theme);
+document.getElementById('query').value = localStorage.getItem("lastQuery") || "";
+
+function toggleTheme() {
+  theme = theme === "dark" ? "light" : "dark";
+  document.body.setAttribute("data-theme", theme);
+  localStorage.setItem("theme", theme);
+}
+
 function exportResults() {
-  if (results.length === 0) return alert("No results.")
-  const text = results.map(r => r.file + "\\n" + r.snippet).join("\\n\\n")
-  const blob = new Blob([text], {type: "text/plain"})
-  const a = document.createElement("a")
-  a.href = URL.createObjectURL(blob)
-  a.download = "results.txt"
-  a.click()
+  if (results.length === 0) return alert("No results.");
+  const text = results.map(r => r.file + "\\n" + r.snippet).join("\\n\\n");
+  const blob = new Blob([text], {type: "text/plain"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "results.txt";
+  a.click();
 }
+
 function startSearch() {
-  const input = document.getElementById('query')
-  const ext = document.getElementById('exts').value
-  const resultsDiv = document.getElementById('results')
-  const counter = document.getElementById('counter')
-  const q = input.value.trim()
-  if (!q) return
-  if (es) es.close()
-  resultsDiv.innerHTML = ''
-  results = []
-  counter.textContent = "Results: 0"
-  document.getElementById("exportBtn").style.display = "none"
-  es = new EventSource(`/search?query=${encodeURIComponent(q)}&ext=${ext}`)
+  const input = document.getElementById('query');
+  const ext = document.getElementById('exts').value;
+  const q = input.value.trim();
+  const resultsDiv = document.getElementById('results');
+  const counter = document.getElementById('counter');
+  if (!q) return;
+  localStorage.setItem("lastQuery", q);
+  if (es) es.close();
+  resultsDiv.innerHTML = '';
+  results = [];
+  counter.textContent = "Results: 0";
+
+  es = new EventSource(`/search?query=${encodeURIComponent(q)}&ext=${ext}`);
   es.onmessage = e => {
-    const item = JSON.parse(e.data)
-    results.push(item)
-    const div = document.createElement('div')
-    div.className = 'result-item'
-    const title = document.createElement('strong')
-    title.textContent = item.file
-    const pre = document.createElement('pre')
-    const rx = new RegExp(item.regex, 'gi')
-    pre.innerHTML = item.snippet.replace(rx, m => `<span class="highlight">${m}</span>`)
-    div.append(title, pre)
-    resultsDiv.append(div)
-    document.getElementById("beep").play()
-    counter.textContent = "Results: " + results.length
-    document.getElementById("exportBtn").style.display = "inline-block"
-    window.scrollTo(0, document.body.scrollHeight)
-  }
+    const item = JSON.parse(e.data);
+    results.push(item);
+    const div = document.createElement('div');
+    div.className = 'result-item';
+    const title = document.createElement('strong');
+    title.textContent = item.file;
+    const pre = document.createElement('pre');
+    const rx = new RegExp(item.regex, 'gi');
+    pre.innerHTML = item.snippet.replace(rx, m => `<span class="highlight">${m}</span>`);
+    div.append(title, pre);
+    resultsDiv.append(div);
+    document.getElementById("beep").play();
+    counter.textContent = "Results: " + results.length;
+    window.scrollTo(0, document.body.scrollHeight);
+  };
   es.onerror = () => {
-    es.close()
+    es.close();
     if (!resultsDiv.hasChildNodes()) {
-      resultsDiv.innerHTML = '<div class="no-results">No results found</div>'
-      document.getElementById("exportBtn").style.display = "none"
+      resultsDiv.innerHTML = '<div class="no-results">No results found</div>';
     }
-  }
+  };
 }
+
 document.getElementById('query').addEventListener('keydown', e => {
-  if (e.key === 'Enter') startSearch()
-})
-const canvas = document.getElementById('bg')
-const ctx = canvas.getContext('2d')
-let w, h, dots = []
-function resize() {
-  w = canvas.width = window.innerWidth
-  h = canvas.height = window.innerHeight
-  dots = Array.from({length: 50}, () => ({
-    x: Math.random()*w,
-    y: Math.random()*h,
-    r: Math.random()*1.5+1,
-    dx: Math.random()*0.5-0.25,
-    dy: Math.random()*0.5-0.25
-  }))
-}
+  if (e.key === 'Enter') startSearch();
+});
+
+const canvas = document.getElementById('bg');
+const ctx = canvas.getContext('2d');
+let w = canvas.width = window.innerWidth;
+let h = canvas.height = window.innerHeight;
+let particles = Array.from({length: 60}, () => ({
+  x: Math.random() * w,
+  y: Math.random() * h,
+  r: Math.random() * 2 + 1,
+  dx: (Math.random() - 0.5) * 0.5,
+  dy: (Math.random() - 0.5) * 0.5
+}));
+
 function animate() {
-  ctx.clearRect(0, 0, w, h)
-  for (let dot of dots) {
-    dot.x += dot.dx
-    dot.y += dot.dy
-    if (dot.x < 0 || dot.x > w) dot.dx *= -1
-    if (dot.y < 0 || dot.y > h) dot.dy *= -1
-    ctx.beginPath()
-    ctx.arc(dot.x, dot.y, dot.r, 0, Math.PI*2)
-    ctx.fillStyle = "rgba(255,255,255,0.2)"
-    ctx.fill()
+  ctx.clearRect(0, 0, w, h);
+  for (let p of particles) {
+    ctx.beginPath();
+    const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 4);
+    gradient.addColorStop(0, 'cyan');
+    gradient.addColorStop(1, 'blue');
+    ctx.fillStyle = gradient;
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+    p.x += p.dx;
+    p.y += p.dy;
+    if (p.x < 0 || p.x > w) p.dx *= -1;
+    if (p.y < 0 || p.y > h) p.dy *= -1;
   }
-  requestAnimationFrame(animate)
+  requestAnimationFrame(animate);
 }
-window.addEventListener('resize', resize)
-resize()
-animate()
+animate();
+window.onresize = () => {
+  w = canvas.width = window.innerWidth;
+  h = canvas.height = window.innerHeight;
+};
 </script>
 </body>
 </html>
@@ -252,7 +269,7 @@ def search():
             except Empty:
                 if all(f.done() for f in futures):
                     alive = False
-        yield "event: done\ndata: {}\n\n"
+                    yield "event: done\ndata: {}\n\n"
 
     return Response(stream_with_context(gen()), mimetype='text/event-stream')
 
