@@ -112,7 +112,6 @@ footer {
     </select>
     <button onclick="startSearch()">Search</button>
     <button onclick="exportResults()">Export</button>
-    <button onclick="toggleTheme()">Theme</button>
   </div>
   <div id="counter">Results: 0</div>
   <div id="results"></div>
