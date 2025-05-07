@@ -10,122 +10,94 @@ EXEC = ThreadPoolExecutor(max_workers=500)
 HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="windows-1252">
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Oldantest ~ Data Leak Finder</title>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600&display=swap');
 body {
-  margin: 0;
   font-family: 'Poppins', sans-serif;
-  background: var(--bg);
-  color: var(--color);
+  margin: 0;
+  background: #111;
+  color: #fff;
   overflow-x: hidden;
-  transition: background 0.3s, color 0.3s;
-}
-:root {
-  --bg: #0a0a0a;
-  --color: #eee;
-  --accent: #00ffff;
-}
-[data-theme="light"] {
-  --bg: #fff;
-  --color: #000;
-  --accent: #0066ff;
 }
 .container {
-  max-width: 880px;
-  margin: 40px auto;
-  background: #141414;
-  padding: 30px;
-  border-radius: 20px;
-  box-shadow: 0 0 40px #00ffff66;
-  animation: fadeIn 1s ease-in-out;
+  padding: 1rem;
+  max-width: 900px;
+  margin: auto;
 }
-h1 {
-  text-align: center;
-  color: var(--accent);
-  font-size: 2.5em;
-  margin-bottom: 30px;
-  text-shadow: 0 0 12px var(--accent);
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 1rem;
 }
-input, button, select {
-  font-size: 18px;
+.controls input, .controls select, .controls button {
+  padding: 0.6rem;
+  font-size: 1rem;
+  border: none;
   border-radius: 8px;
-  transition: .3s;
 }
-input {
-  width: calc(100% - 120px);
-  padding: 15px;
-  background: #111;
+.controls input, .controls select {
+  flex: 1 1 150px;
+}
+.controls button {
+  background-color: #222;
   color: #fff;
-  border: none;
-  outline: none;
-  float: left;
-  margin-bottom: 20px;
-}
-button {
-  width: 100px;
-  padding: 15px;
-  margin-left: 10px;
-  background: var(--accent);
-  border: none;
-  color: #000;
   cursor: pointer;
 }
-button:hover { background: #00cccc; }
-.result-item {
-  background: #1e1e1e;
-  margin: 12px 0;
-  padding: 18px;
-  border-radius: 12px;
-  box-shadow: 0 0 12px var(--accent);
-  animation: fadeSlide 0.5s ease-out;
+.controls button:hover {
+  background-color: #444;
 }
-.result-item strong {
-  display: block;
-  color: var(--accent);
-  margin-bottom: 8px;
+#results {
+  margin-top: 1rem;
+}
+.result-item {
+  background: #222;
+  padding: 1rem;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  animation: fadeIn 0.3s ease-out forwards;
 }
 .result-item pre {
-  background: #111;
-  padding: 12px;
-  border-radius: 8px;
-  overflow: auto;
-  color: #fff;
-  font-size: 0.95em;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
-.highlight { background: #ff0; color: #000; padding: 2px 4px; border-radius: 4px; }
-.no-results { text-align: center; margin-top: 30px; font-size: 20px; color: #888; }
-@keyframes fadeIn { from{opacity:0; transform:scale(0.97);} to{opacity:1; transform:scale(1);} }
-@keyframes fadeSlide { from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
-.controls { display: flex; flex-wrap: wrap; justify-content: space-between; margin-bottom: 20px; gap: 10px; }
+.highlight {
+  background: yellow;
+  color: black;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 canvas {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
+  z-index: -1;
+}
+.no-results {
+  text-align: center;
+  padding: 2rem;
+  color: #888;
 }
 footer {
   text-align: center;
-  margin-top: 30px;
-  color: #888;
+  margin-top: 3rem;
+  color: #555;
+  font-size: 0.9rem;
 }
 @media (max-width: 768px) {
-  h1 { font-size: 2em; }
-  input { width: calc(100% - 100px); }
-}
-@media (max-width: 480px) {
-  h1 { font-size: 1.8em; }
-  .controls { flex-direction: column; }
+  .controls {
+    flex-direction: column;
+  }
 }
 </style>
 </head>
 <body data-theme="dark">
-<canvas id="backgroundCanvas"></canvas>
+<canvas id="bg"></canvas>
 <div class="container">
   <h1>Oldantest ~ Leaks Finder</h1>
   <div class="controls">
@@ -136,97 +108,97 @@ footer {
       <option value=".csv">.csv</option>
       <option value=".json">.json</option>
     </select>
-    <input type="text" id="filefilter" placeholder="Filter filename...">
     <button onclick="startSearch()">Search</button>
-    <button onclick="exportResults()">Export</button>
-    <button onclick="toggleTheme()">Theme</button>
+    <button id="exportBtn" onclick="exportResults()" style="display:none;">Export</button>
   </div>
   <div id="counter">Results: 0</div>
   <div id="results"></div>
 </div>
+<audio id="beep" src="/static/beep-6-96243.mp3"></audio>
 <footer>&copy; Oldantest 2025. All rights reserved.</footer>
-<audio id="beep" src="https://freesound.org/data/previews/341/341695_5260877-lq.mp3"></audio>
 <script>
-let es, results = [], theme = localStorage.getItem("theme") || "dark";
-document.body.setAttribute("data-theme", theme);
-document.getElementById('query').value = localStorage.getItem("lastQuery") || "";
-
-function toggleTheme() {
-  theme = theme === "dark" ? "light" : "dark";
-  document.body.setAttribute("data-theme", theme);
-  localStorage.setItem("theme", theme);
-}
-
+let es, results = []
 function exportResults() {
-  if (results.length === 0) return alert("No results.");
-  const text = results.map(r => r.file + "\\n" + r.snippet).join("\\n\\n");
-  const blob = new Blob([text], {type: "text/plain"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "results.txt";
-  a.click();
+  if (results.length === 0) return alert("No results.")
+  const text = results.map(r => r.file + "\\n" + r.snippet).join("\\n\\n")
+  const blob = new Blob([text], {type: "text/plain"})
+  const a = document.createElement("a")
+  a.href = URL.createObjectURL(blob)
+  a.download = "results.txt"
+  a.click()
 }
-
 function startSearch() {
-  const input = document.getElementById('query');
-  const ext = document.getElementById('exts').value;
-  const filter = document.getElementById('filefilter').value.trim();
-  const resultsDiv = document.getElementById('results');
-  const counter = document.getElementById('counter');
-  const q = input.value.trim();
-  if (!q) return;
-  localStorage.setItem("lastQuery", q);
-  if (es) es.close();
-  resultsDiv.innerHTML = '';
-  results = [];
-  counter.textContent = "Results: 0";
-
-  es = new EventSource(`/search?query=${encodeURIComponent(q)}&ext=${ext}&name=${encodeURIComponent(filter)}`);
+  const input = document.getElementById('query')
+  const ext = document.getElementById('exts').value
+  const resultsDiv = document.getElementById('results')
+  const counter = document.getElementById('counter')
+  const q = input.value.trim()
+  if (!q) return
+  if (es) es.close()
+  resultsDiv.innerHTML = ''
+  results = []
+  counter.textContent = "Results: 0"
+  document.getElementById("exportBtn").style.display = "none"
+  es = new EventSource(`/search?query=${encodeURIComponent(q)}&ext=${ext}`)
   es.onmessage = e => {
-    const item = JSON.parse(e.data);
-    results.push(item);
-    const div = document.createElement('div');
-    div.className = 'result-item';
-    const title = document.createElement('strong');
-    title.textContent = item.file;
-    const pre = document.createElement('pre');
-    const rx = new RegExp(item.regex,'gi');
-    pre.innerHTML = item.snippet.replace(rx, m => `<span class="highlight">${m}</span>`);
-    div.append(title, pre);
-    resultsDiv.append(div);
-    document.getElementById("beep").play();
-    counter.textContent = "Results: " + results.length;
-    window.scrollTo(0, document.body.scrollHeight);
-  };
-  es.onerror = () => {
-    es.close();
-    if (!resultsDiv.hasChildNodes()) {
-      resultsDiv.innerHTML = '<div class="no-results">No results found</div>';
-    }
-  };
-}
-
-document.getElementById('query').addEventListener('keydown', e => { if(e.key === 'Enter') startSearch(); });
-
-function generateCanvas() {
-  const canvas = document.getElementById('backgroundCanvas');
-  const ctx = canvas.getContext('2d');
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-
-  function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.beginPath();
-    ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, 5 + Math.random() * 10, 0, Math.PI * 2);
-    ctx.fillStyle = `hsl(${Math.random() * 360}, 100%, 50%)`;
-    ctx.fill();
-    requestAnimationFrame(draw);
+    const item = JSON.parse(e.data)
+    results.push(item)
+    const div = document.createElement('div')
+    div.className = 'result-item'
+    const title = document.createElement('strong')
+    title.textContent = item.file
+    const pre = document.createElement('pre')
+    const rx = new RegExp(item.regex, 'gi')
+    pre.innerHTML = item.snippet.replace(rx, m => `<span class="highlight">${m}</span>`)
+    div.append(title, pre)
+    resultsDiv.append(div)
+    document.getElementById("beep").play()
+    counter.textContent = "Results: " + results.length
+    document.getElementById("exportBtn").style.display = "inline-block"
+    window.scrollTo(0, document.body.scrollHeight)
   }
-
-  draw();
+  es.onerror = () => {
+    es.close()
+    if (!resultsDiv.hasChildNodes()) {
+      resultsDiv.innerHTML = '<div class="no-results">No results found</div>'
+      document.getElementById("exportBtn").style.display = "none"
+    }
+  }
 }
-
-generateCanvas();
+document.getElementById('query').addEventListener('keydown', e => {
+  if (e.key === 'Enter') startSearch()
+})
+const canvas = document.getElementById('bg')
+const ctx = canvas.getContext('2d')
+let w, h, dots = []
+function resize() {
+  w = canvas.width = window.innerWidth
+  h = canvas.height = window.innerHeight
+  dots = Array.from({length: 50}, () => ({
+    x: Math.random()*w,
+    y: Math.random()*h,
+    r: Math.random()*1.5+1,
+    dx: Math.random()*0.5-0.25,
+    dy: Math.random()*0.5-0.25
+  }))
+}
+function animate() {
+  ctx.clearRect(0, 0, w, h)
+  for (let dot of dots) {
+    dot.x += dot.dx
+    dot.y += dot.dy
+    if (dot.x < 0 || dot.x > w) dot.dx *= -1
+    if (dot.y < 0 || dot.y > h) dot.dy *= -1
+    ctx.beginPath()
+    ctx.arc(dot.x, dot.y, dot.r, 0, Math.PI*2)
+    ctx.fillStyle = "rgba(255,255,255,0.2)"
+    ctx.fill()
+  }
+  requestAnimationFrame(animate)
+}
+window.addEventListener('resize', resize)
+resize()
+animate()
 </script>
 </body>
 </html>
@@ -257,7 +229,6 @@ def index():
 def search():
     q = request.args.get('query', '').strip()
     ext = request.args.get('ext', 'all')
-    name_filter = request.args.get('name', '').lower()
     if not q:
         return '', 204
     pat = build_pattern(q)
@@ -268,8 +239,6 @@ def search():
             if not fn.lower().endswith(tuple(EXTS)):
                 continue
             if ext != 'all' and not fn.lower().endswith(ext):
-                continue
-            if name_filter and name_filter not in fn.lower():
                 continue
             path = os.path.join(root, fn)
             futures.append(EXEC.submit(file_scanner, path, pat, q_out))
